@@ -19,6 +19,12 @@ type Meta struct {
 	Size int64
 }
 
+// IgnorePatterns keeps track of our defined ignore patterns
+type IgnorePatterns struct {
+	Files       map[string]bool
+	Directories map[string]bool
+}
+
 // Pack creates a slug from a src directory, and writes the new slug
 // to w. Returns metadata about the slug and any errors.
 //
@@ -33,11 +39,14 @@ func Pack(src string, w io.Writer, dereference bool) (*Meta, error) {
 	// Tar the file contents.
 	tarW := tar.NewWriter(gzipW)
 
+	// Load the ignore context
+	// TODO: load .terraformignore file
+
 	// Track the metadata details as we go.
 	meta := &Meta{}
 
 	// Walk the tree of files.
-	err := filepath.Walk(src, packWalkFn(src, src, src, tarW, meta, dereference))
+	err := filepath.Walk(src, packWalkFn(src, src, src, tarW, meta, dereference, defaultIgnorePatterns))
 	if err != nil {
 		return nil, err
 	}
@@ -55,15 +64,27 @@ func Pack(src string, w io.Writer, dereference bool) (*Meta, error) {
 	return meta, nil
 }
 
-func packWalkFn(root, src, dst string, tarW *tar.Writer, meta *Meta, dereference bool) filepath.WalkFunc {
+func packWalkFn(root, src, dst string, tarW *tar.Writer, meta *Meta, dereference bool, ignorePatterns IgnorePatterns) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
+		skipIgnore := false
 
-		// Skip the .git directory.
-		if info.IsDir() && info.Name() == ".git" {
-			return filepath.SkipDir
+		// Is this one of our ignored files?
+		if isIgnoredPath, ok := ignorePatterns.Files[info.Name()]; ok {
+			if isIgnoredPath {
+				return nil
+			}
+			skipIgnore = true
+		}
+		// Is this within one of our ignored directories?
+		if isIgnoredPath, ok := ignorePatterns.Directories[info.Name()]; ok {
+			if isIgnoredPath {
+				// can't use skipdir here in case a child is something we should include
+				return nil
+			}
+			skipIgnore = true
 		}
 
 		// Get the relative path from the current src directory.
@@ -75,20 +96,24 @@ func packWalkFn(root, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 			return nil
 		}
 
-		// Ignore the .terraform directory itself.
-		if info.IsDir() && info.Name() == ".terraform" {
-			return nil
+		// Ignore any files in ignored directories
+		// dir, _ := filepath.Rel(src, filepath.Dir(subpath))
+		if isIgnoredPath, ok := ignorePatterns.Directories[filepath.Dir(subpath)]; ok {
+			if isIgnoredPath {
+				return nil
+			}
+			skipIgnore = true
 		}
 
-		// Ignore any files in the .terraform directory.
-		if !info.IsDir() && filepath.Dir(subpath) == ".terraform" {
-			return nil
-		}
-
-		// Skip .terraform subdirectories, except for the modules subdirectory.
-		if strings.HasPrefix(subpath, ".terraform"+string(filepath.Separator)) &&
-			!strings.HasPrefix(subpath, filepath.Clean(".terraform/modules")) {
-			return filepath.SkipDir
+		// Skip subdirectories within ignored directories
+		// if the subpath has a prefix that is ignored
+		// if the directory is a child of an ignored directory, it should be ignored
+		if !skipIgnore {
+			for dir, ignored := range ignorePatterns.Directories {
+				if ignored && strings.HasPrefix(subpath, dir+string(filepath.Separator)) {
+					return nil
+				}
+			}
 		}
 
 		// Get the relative path from the initial root directory.
@@ -159,7 +184,8 @@ func packWalkFn(root, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 			// If the target is a directory we can recurse into the target
 			// directory by calling the packWalkFn with updated arguments.
 			if info.IsDir() {
-				return filepath.Walk(target, packWalkFn(root, target, path, tarW, meta, dereference))
+				// I'm wondering if this section is unnecessary?
+				return filepath.Walk(target, packWalkFn(root, target, path, tarW, meta, dereference, ignorePatterns))
 			}
 
 			// Dereference this symlink by updating the header with the target file
@@ -305,4 +331,16 @@ func checkFileMode(m os.FileMode) (keep, body bool) {
 	}
 
 	return false, false
+}
+
+var defaultIgnorePatterns = IgnorePatterns{
+	Files: map[string]bool{
+		"baz.txt": true,
+	},
+	Directories: map[string]bool{
+		".git":               true,
+		".terraform":         true,
+		".terraform.d":       true,
+		".terraform/modules": false,
+	},
 }
