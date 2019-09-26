@@ -39,14 +39,15 @@ func Pack(src string, w io.Writer, dereference bool) (*Meta, error) {
 	// Tar the file contents.
 	tarW := tar.NewWriter(gzipW)
 
-	// Load the ignore context
-	// TODO: load .terraformignore file
+	// Load the ignore pattern configuration, which will use
+	// defaults if no .terraformignore is configured
+	ignorePatterns := parseIgnoreFile()
 
 	// Track the metadata details as we go.
 	meta := &Meta{}
 
 	// Walk the tree of files.
-	err := filepath.Walk(src, packWalkFn(src, src, src, tarW, meta, dereference, defaultIgnorePatterns))
+	err := filepath.Walk(src, packWalkFn(src, src, src, tarW, meta, dereference, ignorePatterns))
 	if err != nil {
 		return nil, err
 	}
@@ -333,10 +334,14 @@ func checkFileMode(m os.FileMode) (keep, body bool) {
 	return false, false
 }
 
+func parseIgnoreFile() IgnorePatterns {
+	// TODO implement
+	defaultIgnorePatterns.Files["baz.txt"] = true
+	return defaultIgnorePatterns
+}
+
 var defaultIgnorePatterns = IgnorePatterns{
-	Files: map[string]bool{
-		"baz.txt": true,
-	},
+	Files: map[string]bool{},
 	Directories: map[string]bool{
 		".git":               true,
 		".terraform":         true,
