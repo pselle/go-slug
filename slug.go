@@ -20,12 +20,6 @@ type Meta struct {
 	Size int64
 }
 
-// IgnorePatterns keeps track of our defined ignore patterns
-type IgnorePatterns struct {
-	Files       map[string]bool
-	Directories map[string]bool
-}
-
 // Pack creates a slug from a src directory, and writes the new slug
 // to w. Returns metadata about the slug and any errors.
 //
@@ -352,14 +346,4 @@ var defaultExclusions = []string{
 	".terraform/*",
 	".terraform/*/*",
 	"!.terraform/modules/*",
-}
-
-var defaultIgnorePatterns = IgnorePatterns{
-	Files: map[string]bool{},
-	Directories: map[string]bool{
-		".git":               true,
-		".terraform":         true,
-		".terraform.d":       true,
-		".terraform/modules": false,
-	},
 }
