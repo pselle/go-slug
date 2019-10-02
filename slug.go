@@ -2,6 +2,7 @@ package slug
 
 import (
 	"archive/tar"
+	"bufio"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -41,7 +42,7 @@ func Pack(src string, w io.Writer, dereference bool) (*Meta, error) {
 
 	// Load the ignore pattern configuration, which will use
 	// defaults if no .terraformignore is configured
-	ignorePatterns := parseIgnoreFile()
+	ignorePatterns := parseIgnoreFile(src)
 
 	// Track the metadata details as we go.
 	meta := &Meta{}
@@ -65,27 +66,10 @@ func Pack(src string, w io.Writer, dereference bool) (*Meta, error) {
 	return meta, nil
 }
 
-func packWalkFn(root, src, dst string, tarW *tar.Writer, meta *Meta, dereference bool, ignorePatterns IgnorePatterns) filepath.WalkFunc {
+func packWalkFn(root, src, dst string, tarW *tar.Writer, meta *Meta, dereference bool, ignorePatterns []string) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
-		}
-		skipIgnore := false
-
-		// Is this one of our ignored files?
-		if isIgnoredPath, ok := ignorePatterns.Files[info.Name()]; ok {
-			if isIgnoredPath {
-				return nil
-			}
-			skipIgnore = true
-		}
-		// Is this within one of our ignored directories?
-		if isIgnoredPath, ok := ignorePatterns.Directories[info.Name()]; ok {
-			if isIgnoredPath {
-				// can't use skipdir here in case a child is something we should include
-				return nil
-			}
-			skipIgnore = true
 		}
 
 		// Get the relative path from the current src directory.
@@ -97,24 +81,29 @@ func packWalkFn(root, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 			return nil
 		}
 
-		// Ignore any files in ignored directories
-		// dir, _ := filepath.Rel(src, filepath.Dir(subpath))
-		if isIgnoredPath, ok := ignorePatterns.Directories[filepath.Dir(subpath)]; ok {
-			if isIgnoredPath {
-				return nil
+		ignore := false
+		for _, p := range ignorePatterns {
+			// ignore files
+			if m, _ := filepath.Match(p, subpath); m {
+				ignore = true
 			}
-			skipIgnore = true
-		}
-
-		// Skip subdirectories within ignored directories
-		// if the subpath has a prefix that is ignored
-		// if the directory is a child of an ignored directory, it should be ignored
-		if !skipIgnore {
-			for dir, ignored := range ignorePatterns.Directories {
-				if ignored && strings.HasPrefix(subpath, dir+string(filepath.Separator)) {
-					return nil
+			// ignore directories
+			if info.IsDir() {
+				if m, _ := filepath.Match(filepath.Clean(p), subpath); m {
+					ignore = true
 				}
 			}
+			// handle exclusion
+			if p[0] == '!' {
+				p = strings.TrimSpace(p[1:])
+				if m, _ := filepath.Match(p, subpath); m {
+					ignore = false
+				}
+			}
+		}
+
+		if ignore {
+			return nil
 		}
 
 		// Get the relative path from the initial root directory.
@@ -334,10 +323,35 @@ func checkFileMode(m os.FileMode) (keep, body bool) {
 	return false, false
 }
 
-func parseIgnoreFile() IgnorePatterns {
-	// TODO implement
-	defaultIgnorePatterns.Files["baz.txt"] = true
-	return defaultIgnorePatterns
+func parseIgnoreFile(rootPath string) []string {
+	file, err := os.Open(filepath.Join(rootPath, ".terraformignore"))
+	defer file.Close()
+
+	// If there's any kind of file error, punt and use the default ignore patterns
+	if err != nil {
+		return defaultExclusions
+	}
+
+	scanner := bufio.NewScanner(file)
+	scanner.Split(bufio.ScanLines)
+
+	var lines []string
+
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	for _, line := range lines {
+		defaultExclusions = append(defaultExclusions, line)
+	}
+	return defaultExclusions
+}
+
+var defaultExclusions = []string{
+	".git/",
+	".terraform/*",
+	".terraform/*/*",
+	"!.terraform/modules/*",
 }
 
 var defaultIgnorePatterns = IgnorePatterns{
