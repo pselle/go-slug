@@ -57,7 +57,7 @@ func TestPack(t *testing.T) {
 			symFound = true
 		}
 	}
-
+	// fmt.Println(fileList)
 	// Make sure we saw and handled a symlink
 	if !symFound {
 		t.Fatal("expected to find symlink")

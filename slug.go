@@ -318,6 +318,7 @@ func checkFileMode(m os.FileMode) (keep, body bool) {
 }
 
 func parseIgnoreFile(rootPath string) []string {
+	// Do the actual file opening
 	file, err := os.Open(filepath.Join(rootPath, ".terraformignore"))
 	defer file.Close()
 
@@ -329,15 +330,26 @@ func parseIgnoreFile(rootPath string) []string {
 	scanner := bufio.NewScanner(file)
 	scanner.Split(bufio.ScanLines)
 
-	var lines []string
+	// Some kind of object here that has regexes
+	// Store whether it's an exclusion or not
 
 	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
+		pattern := scanner.Text()
+		// Ignore blank lines
+		if len(pattern) == 0 {
+			continue
+		}
+		// Trim spaces
+		pattern = strings.TrimSpace(pattern)
+		// Ignore comments
+		if pattern[0] == '#' {
+			continue
+		}
+		defaultExclusions = append(defaultExclusions, pattern)
 	}
 
-	for _, line := range lines {
-		defaultExclusions = append(defaultExclusions, line)
-	}
+	// fmt.Println(defaultExclusions)
+
 	return defaultExclusions
 }
 
