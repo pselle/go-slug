@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -409,6 +410,130 @@ func TestCheckFileMode(t *testing.T) {
 					tc.keep, tc.body, keep, body)
 			}
 		})
+	}
+}
+
+func TestIgnore(t *testing.T) {
+	slug := bytes.NewBuffer(nil)
+
+	meta, err := Pack("testdata/archive-dir2", slug, true)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	gzipR, err := gzip.NewReader(slug)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	tarR := tar.NewReader(gzipR)
+	var (
+		symFound bool
+		fileList []string
+		slugSize int64
+	)
+
+	for {
+		hdr, err := tarR.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
+
+		fileList = append(fileList, hdr.Name)
+		if hdr.Typeflag == tar.TypeReg || hdr.Typeflag == tar.TypeRegA {
+			slugSize += hdr.Size
+		}
+
+		if hdr.Name == "sub/bar.txt" {
+			if hdr.Typeflag != tar.TypeSymlink {
+				t.Fatalf("expect symlink for file 'sub/bar.txt'")
+			}
+			if hdr.Linkname != "../bar.txt" {
+				t.Fatalf("expect target of '../bar.txt', got %q", hdr.Linkname)
+			}
+			symFound = true
+		}
+	}
+	fmt.Println(fileList)
+	// Make sure we saw and handled a symlink
+	if !symFound {
+		t.Fatal("expected to find symlink")
+	}
+
+	// Make sure the .git directory is ignored
+	for _, file := range fileList {
+		if strings.Contains(file, ".git") {
+			t.Fatalf("unexpected .git content: %s", file)
+		}
+	}
+
+	// Make sure the .terraform directory is ignored,
+	// except for the .terraform/modules subdirectory.
+	for _, file := range fileList {
+		if strings.HasPrefix(file, ".terraform"+string(filepath.Separator)) &&
+			!strings.HasPrefix(file, filepath.Clean(".terraform/modules")) {
+			t.Fatalf("unexpected .terraform content: %s", file)
+		}
+	}
+
+	// Make sure .terraform/modules is included.
+	moduleDir := false
+	for _, file := range fileList {
+		if strings.HasPrefix(file, filepath.Clean(".terraform/modules")) {
+			moduleDir = true
+			break
+		}
+	}
+	if !moduleDir {
+		t.Fatal("expected to include .terraform/modules")
+	}
+
+	// Make sure .terraformrc is included.
+	terraformrc := false
+	for _, file := range fileList {
+		if file == ".terraformrc" {
+			terraformrc = true
+			break
+		}
+	}
+	if !terraformrc {
+		t.Fatal("expected to include .terraformrc")
+	}
+
+	// Make sure foo.terraform/bar.txt is included.
+	fooTerraformDir := false
+	for _, file := range fileList {
+		if file == filepath.Clean("foo.terraform/bar.txt") {
+			fooTerraformDir = true
+			break
+		}
+	}
+	if !fooTerraformDir {
+		t.Fatal("expected to include foo.terraform/bar.txt")
+	}
+
+	// Make sure baz.txt is excluded.
+	bazTxt := false
+	for _, file := range fileList {
+		if file == filepath.Clean("baz.txt") {
+			bazTxt = true
+			break
+		}
+	}
+	if bazTxt {
+		t.Fatal("should not include baz.txt")
+	}
+
+	// Check the metadata
+	expect := &Meta{
+		Files: fileList,
+		Size:  slugSize,
+	}
+	if !reflect.DeepEqual(meta, expect) {
+		t.Fatalf("\nexpect:\n%#v\n\nactual:\n%#v", expect, meta)
 	}
 }
 
