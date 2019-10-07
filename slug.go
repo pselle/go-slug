@@ -302,11 +302,8 @@ func parseIgnoreFile(rootPath string) []rule {
 	file, err := os.Open(filepath.Join(rootPath, ".terraformignore"))
 	defer file.Close()
 
-	// Our slice that will hold the rules
-
 	// If there's any kind of file error, punt and use the default ignore patterns
 	if err != nil {
-		fmt.Println("err!")
 		return defaultExclusions
 	}
 
@@ -328,6 +325,10 @@ func parseIgnoreFile(rootPath string) []rule {
 		rule := rule{}
 		if pattern[0] == '!' {
 			rule.excluded = true
+			pattern = pattern[1:]
+		}
+		// Root directory
+		if pattern[0] == '.' {
 			pattern = pattern[1:]
 		}
 		rule.pattern = pattern
@@ -353,10 +354,19 @@ func createRule(pattern string, excluded bool, regex regexp.Regexp) rule {
 
 func matchIgnorePattern(subpath string, ignorePatterns []rule, isDir bool) (ignore bool) {
 	ignore = false
+	h := false
+	// if subpath == "something/with-baz.txt" {
+	// 	h = true
+	// }
 	for _, p := range ignorePatterns {
 		// ignore files
 		if m, _ := filepath.Match(p.pattern, subpath); m {
 			ignore = !p.excluded
+		}
+		if h {
+			fmt.Println(subpath)
+			fmt.Println(p.pattern)
+			fmt.Println(ignore)
 		}
 		// ignore directories
 		if isDir {
@@ -364,6 +374,7 @@ func matchIgnorePattern(subpath string, ignorePatterns []rule, isDir bool) (igno
 				ignore = !p.excluded
 			}
 		}
+
 		// Is the file in an ignored directory?
 		// Get the directories of the path
 		// Do does its parent directories match our path?
@@ -375,8 +386,17 @@ func matchIgnorePattern(subpath string, ignorePatterns []rule, isDir bool) (igno
 			// Directories are greater than our pattern, see if it is a subpattern
 			for i := 0; i < len(dirs); i++ {
 				directorySubpath := strings.Join(dirs[:i], string(os.PathSeparator))
-				if m, _ := filepath.Match(filepath.Clean(p.pattern), directorySubpath); m {
-					ignore = !p.excluded
+				for j := 0; j < len(pdir); j++ {
+					if m, _ := filepath.Match(pdir[j], directorySubpath); m {
+						ignore = !p.excluded
+					}
+					if h {
+						fmt.Println("a")
+						fmt.Println(pdir[j])
+						fmt.Println(subpath)
+						fmt.Println(p.pattern)
+						fmt.Println(ignore)
+					}
 				}
 			}
 		}
