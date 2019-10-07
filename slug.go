@@ -76,37 +76,7 @@ func packWalkFn(root, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 			return nil
 		}
 
-		ignore := false
-		for _, p := range ignorePatterns {
-			// ignore files
-			if m, _ := filepath.Match(p.pattern, subpath); m {
-				ignore = !p.excluded
-			}
-			// ignore directories
-			if info.IsDir() {
-				if m, _ := filepath.Match(filepath.Clean(p.pattern), subpath); m {
-					ignore = !p.excluded
-				}
-			}
-			// Is the file in an ignored directory?
-			// Get the directories of the path
-			// Do does its parent directories match our path?
-			// ex. .terraform/plugins/foo should be ignored
-			dirs := strings.Split(subpath, string(os.PathSeparator))
-			pdir := strings.Split(p.pattern, string(os.PathSeparator))
-			// Does our pattern have fewer directories than the file we're inspecting?
-			if len(pdir) <= len(dirs) {
-				// Directories are greater than our pattern, see if it is a subpattern
-				for i := 0; i < len(dirs); i++ {
-					directorySubpath := strings.Join(dirs[:i], string(os.PathSeparator))
-					if m, _ := filepath.Match(filepath.Clean(p.pattern), directorySubpath); m {
-						ignore = !p.excluded
-					}
-				}
-			}
-		}
-
-		if ignore {
+		if m := matchIgnorePattern(subpath, ignorePatterns, info.IsDir()); m {
 			return nil
 		}
 
@@ -379,6 +349,39 @@ func createRule(pattern string, excluded bool, regex regexp.Regexp) rule {
 		excluded: excluded,
 		regex:    regex,
 	}
+}
+
+func matchIgnorePattern(subpath string, ignorePatterns []rule, isDir bool) (ignore bool) {
+	ignore = false
+	for _, p := range ignorePatterns {
+		// ignore files
+		if m, _ := filepath.Match(p.pattern, subpath); m {
+			ignore = !p.excluded
+		}
+		// ignore directories
+		if isDir {
+			if m, _ := filepath.Match(filepath.Clean(p.pattern), subpath); m {
+				ignore = !p.excluded
+			}
+		}
+		// Is the file in an ignored directory?
+		// Get the directories of the path
+		// Do does its parent directories match our path?
+		// ex. .terraform/plugins/foo should be ignored
+		dirs := strings.Split(subpath, string(os.PathSeparator))
+		pdir := strings.Split(p.pattern, string(os.PathSeparator))
+		// Does our pattern have fewer directories than the file we're inspecting?
+		if len(pdir) <= len(dirs) {
+			// Directories are greater than our pattern, see if it is a subpattern
+			for i := 0; i < len(dirs); i++ {
+				directorySubpath := strings.Join(dirs[:i], string(os.PathSeparator))
+				if m, _ := filepath.Match(filepath.Clean(p.pattern), directorySubpath); m {
+					ignore = !p.excluded
+				}
+			}
+		}
+	}
+	return
 }
 
 /*
