@@ -2,13 +2,11 @@ package slug
 
 import (
 	"archive/tar"
-	"bufio"
 	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
@@ -76,7 +74,7 @@ func packWalkFn(root, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 			return nil
 		}
 
-		if m := matchIgnorePattern(subpath, ignorePatterns, info.IsDir()); m {
+		if m := matchIgnorePattern(subpath, ignorePatterns); m {
 			return nil
 		}
 
@@ -295,129 +293,4 @@ func checkFileMode(m os.FileMode) (keep, body bool) {
 	}
 
 	return false, false
-}
-
-func parseIgnoreFile(rootPath string) []rule {
-	// Do the actual file opening
-	file, err := os.Open(filepath.Join(rootPath, ".terraformignore"))
-	defer file.Close()
-
-	// If there's any kind of file error, punt and use the default ignore patterns
-	if err != nil {
-		return defaultExclusions
-	}
-
-	scanner := bufio.NewScanner(file)
-	scanner.Split(bufio.ScanLines)
-
-	for scanner.Scan() {
-		pattern := scanner.Text()
-		// Ignore blank lines
-		if len(pattern) == 0 {
-			continue
-		}
-		// Trim spaces
-		pattern = strings.TrimSpace(pattern)
-		// Ignore comments
-		if pattern[0] == '#' {
-			continue
-		}
-		rule := rule{}
-		if pattern[0] == '!' {
-			rule.excluded = true
-			pattern = pattern[1:]
-		}
-		// Root directory
-		if pattern[0] == '.' {
-			pattern = pattern[1:]
-		}
-		rule.pattern = pattern
-		// TODO regex??
-		defaultExclusions = append(defaultExclusions, rule)
-	}
-	return defaultExclusions
-}
-
-type rule struct {
-	pattern  string
-	excluded bool
-	regex    regexp.Regexp
-}
-
-func createRule(pattern string, excluded bool, regex regexp.Regexp) rule {
-	return rule{
-		pattern:  pattern,
-		excluded: excluded,
-		regex:    regex,
-	}
-}
-
-func matchIgnorePattern(subpath string, ignorePatterns []rule, isDir bool) (ignore bool) {
-	ignore = false
-	h := false
-	// if subpath == "something/with-baz.txt" {
-	// 	h = true
-	// }
-	for _, p := range ignorePatterns {
-		// ignore files
-		if m, _ := filepath.Match(p.pattern, subpath); m {
-			ignore = !p.excluded
-		}
-		if h {
-			fmt.Println(subpath)
-			fmt.Println(p.pattern)
-			fmt.Println(ignore)
-		}
-		// ignore directories
-		if isDir {
-			if m, _ := filepath.Match(filepath.Clean(p.pattern), subpath); m {
-				ignore = !p.excluded
-			}
-		}
-
-		// Is the file in an ignored directory?
-		// Get the directories of the path
-		// Do does its parent directories match our path?
-		// ex. .terraform/plugins/foo should be ignored
-		dirs := strings.Split(subpath, string(os.PathSeparator))
-		pdir := strings.Split(p.pattern, string(os.PathSeparator))
-		// Does our pattern have fewer directories than the file we're inspecting?
-		if len(pdir) <= len(dirs) {
-			// Directories are greater than our pattern, see if it is a subpattern
-			for i := 0; i < len(dirs); i++ {
-				directorySubpath := strings.Join(dirs[:i], string(os.PathSeparator))
-				for j := 0; j < len(pdir); j++ {
-					if m, _ := filepath.Match(pdir[j], directorySubpath); m {
-						ignore = !p.excluded
-					}
-					if h {
-						fmt.Println("a")
-						fmt.Println(pdir[j])
-						fmt.Println(subpath)
-						fmt.Println(p.pattern)
-						fmt.Println(ignore)
-					}
-				}
-			}
-		}
-	}
-	return
-}
-
-/*
-	".git/",
-	".terraform/",
-	"!.terraform/modules/",
-*/
-
-var defaultExclusions = []rule{{
-	pattern:  ".git/",
-	excluded: false,
-}, {
-	pattern:  ".terraform/",
-	excluded: false,
-}, {
-	pattern:  ".terraform/modules",
-	excluded: true,
-},
 }
