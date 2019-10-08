@@ -87,6 +87,10 @@ func TestTerraformIgnore(t *testing.T) {
 			path:  "terraform.d",
 			match: false,
 		},
+		{
+			path:  "baz/boop.txt",
+			match: true,
+		},
 	}
 	for i, p := range paths {
 		match := matchIgnorePattern(p.path, ignorePatterns)
