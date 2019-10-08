@@ -47,7 +47,7 @@ func readRules(input io.Reader) []rule {
 			// Should I add back the ! later?
 		}
 		// Tidy things up
-		pattern = filepath.Clean(pattern)
+		// pattern = filepath.Clean(pattern)
 		pattern = filepath.ToSlash(pattern)
 		if len(pattern) > 1 && pattern[0] == '/' {
 			pattern = pattern[1:]
@@ -76,7 +76,9 @@ func matchIgnorePattern(path string, patterns []rule) bool {
 		if pattern.excluded {
 			negative = true
 		}
-
+		// fmt.Println("----------------------------")
+		// fmt.Println("pattern:", pattern.pattern)
+		// fmt.Println("excluded: ", negative)
 		match, err := pattern.match(path)
 		if err != nil {
 			return false //, err
@@ -94,18 +96,38 @@ func matchIgnorePattern(path string, patterns []rule) bool {
 			// }
 			// Is our rule for a directory? i.e. ends in /
 			if pattern.pattern[len(pattern.pattern)-1] == os.PathSeparator {
+				// fmt.Println("----------")
+				// fmt.Println(path)
 				// does some combination of its parents match our rule?
 				// Start at 1 to skip the .
 				for i := 1; i < len(dirSplit); i++ {
+					// x := strings.Join(dirSplit[:i], string(os.PathSeparator))
+					// fmt.Println(x)
+					// y := strings.Join(dirSplit[i:], string(os.PathSeparator))
+					// fmt.Println(y)
+					// From the left
 					match, _ = pattern.match(strings.Join(dirSplit[:i], string(os.PathSeparator)) + string(os.PathSeparator))
 					// We found a match! stop whilst ahead
 					if match {
 						break
 					}
+					// From the right
+					match, _ = pattern.match(strings.Join(dirSplit[i:], string(os.PathSeparator)))
+					if match {
+						break
+					}
+				}
+
+				// Something special if our pattern is the current directory
+				// This is a case of say, ignoring terraform.d but NOT ./terraform.d/
+				if pattern.pattern[0:2] == "./" {
+					fmt.Println("HEY")
+					pattern.pattern = pattern.pattern[2:]
+					fmt.Println(pattern.pattern)
+					pattern.compile()
+					match, _ = pattern.match(dir)
 				}
 			}
-			// Is the pattern a child of an ignored directory?
-			// .terraform/foo's parent is .terraform, which is ignored
 		}
 
 		if match {
@@ -120,12 +142,6 @@ func matchIgnorePattern(path string, patterns []rule) bool {
 	return matched //, nil
 }
 
-/*
-	".git/",
-	".terraform/",
-	"!.terraform/modules/",
-*/
-
 type rule struct {
 	pattern  string
 	excluded bool
@@ -135,13 +151,14 @@ type rule struct {
 
 func (r *rule) match(path string) (bool, error) {
 	if r.regex == nil {
+		fmt.Println("compilin")
 		if err := r.compile(); err != nil {
 			return false, filepath.ErrBadPattern
 		}
 	}
 
 	b := r.regex.MatchString(path)
-	// fmt.Println(path, r.pattern, r.regex)
+	fmt.Println(path, r.pattern, r.regex, b)
 	return b, nil
 }
 
@@ -149,7 +166,7 @@ func (r *rule) compile() error {
 	regStr := "^"
 	pattern := r.pattern
 	// Go through the pattern and convert it to a regexp.
-	// We use a scanner so we can support utf-8 chars.
+	// Use a scanner to support utf-8 chars.
 	var scan scanner.Scanner
 	scan.Init(strings.NewReader(pattern))
 
@@ -161,7 +178,6 @@ func (r *rule) compile() error {
 
 	for scan.Peek() != scanner.EOF {
 		ch := scan.Next()
-
 		if ch == '*' {
 			if scan.Peek() == '*' {
 				// is some flavor of "**"
@@ -221,6 +237,12 @@ func (r *rule) compile() error {
 	r.regex = re
 	return nil
 }
+
+/*
+	".git/",
+	".terraform/",
+	"!.terraform/modules/",
+*/
 
 var defaultExclusions = []rule{
 	{

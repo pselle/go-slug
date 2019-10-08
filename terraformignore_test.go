@@ -7,19 +7,13 @@ import (
 // Test ignore functions in isolation
 func TestTerraformIgnore(t *testing.T) {
 	// path to directory without .terraformignore
-	// p := parseIgnoreFile("testdata/external-dir")
-	// if len(p) != 5 {
-	// 	t.Fatal("A directory without .terraformignore should get the default patterns")
-	// }
+	p := parseIgnoreFile("testdata/external-dir")
+	if len(p) != 3 {
+		t.Fatal("A directory without .terraformignore should get the default patterns")
+	}
 
 	// load the .terraformignore file's patterns
 	ignorePatterns := parseIgnoreFile("testdata/archive-dir")
-	// ignorePatterns := []rule{
-	// 	{
-	// 		pattern:  "foo/*.md",
-	// 		excluded: false,
-	// 	},
-	// }
 	type file struct {
 		// the actual path, should be file path format /dir/subdir/file.extension
 		path string
@@ -64,28 +58,33 @@ func TestTerraformIgnore(t *testing.T) {
 			path:  "something/baz.x",
 			match: false,
 		},
-		// // ignore sub- terraform.d paths
-		// {
-		// 	path:  "some-module/terraform.d/x",
-		// 	match: true,
-		// },
-		// // but not the root one
-		// // {
-		// // 	path:  "terraform.d/",
-		// // 	match: false,
-		// // },
-		{
-			// We ignore the directory, but a file of the same name could exist
-			path:  "terraform.d",
-			match: false,
-		},
-		// // Getting into * patterns
+		// Getting into * patterns
 		{
 			path:  "foo/ignored-doc.md",
 			match: true,
 		},
+		// Should match [a-z] group
 		{
-			path:  "foo/otherfile",
+			path:  "bar/something-a.txt",
+			match: true,
+		},
+		// ignore sub- terraform.d paths
+		{
+			path:  "some-module/terraform.d/x",
+			match: true,
+		},
+		// but not the root one
+		{
+			path:  "terraform.d/",
+			match: false,
+		},
+		{
+			path:  "terraform.d/foo",
+			match: false,
+		},
+		{
+			// We ignore the directory, but a file of the same name could exist
+			path:  "terraform.d",
 			match: false,
 		},
 	}
