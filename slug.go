@@ -81,7 +81,7 @@ func packWalkFn(root, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 		// Catch directories so we don't end up with empty directories,
 		// the files are ignored correctly
 		if info.IsDir() {
-			if m := matchIgnorePattern(subpath+"/", ignorePatterns); m {
+			if m := matchIgnorePattern(subpath+string(os.PathSeparator), ignorePatterns); m {
 				return nil
 			}
 		}
