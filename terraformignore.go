@@ -82,7 +82,10 @@ func matchIgnorePattern(path string, patterns []rule) bool {
 			return false //, err
 		}
 
-		match, err = pattern.match(filename)
+		// If no match, try the filename alone
+		if !match {
+			match, err = pattern.match(filename)
+		}
 
 		if !match && dir != "" {
 			// Check to see if the pattern matches one of our parent dirs.
@@ -210,7 +213,6 @@ func (r *rule) compile() error {
 	}
 
 	regStr += "$"
-
 	re, err := regexp.Compile(regStr)
 	if err != nil {
 		return err
