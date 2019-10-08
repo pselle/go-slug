@@ -23,15 +23,12 @@ func TestTerraformIgnore(t *testing.T) {
 	type file struct {
 		// the actual path, should be file path format /dir/subdir/file.extension
 		path string
-		// is it a directory?
-		dir bool
 		// should match
 		match bool
 	}
 	paths := []file{
 		{
 			path:  ".terraform/",
-			dir:   true,
 			match: true,
 		},
 		{
@@ -40,67 +37,55 @@ func TestTerraformIgnore(t *testing.T) {
 		},
 		{
 			path:  ".terraform/foo/bar",
-			dir:   false,
 			match: true,
 		},
 		{
 			path:  ".terraform/foo/bar/more/directories/so/many",
-			dir:   false,
 			match: true,
 		},
 		{
 			path:  ".terraform/foo/ignored-subdirectory/",
-			dir:   true,
 			match: true,
 		},
 		{
 			path:  "baz.txt",
-			dir:   false,
 			match: true,
 		},
 		{
 			path:  "parent/foo/baz.txt",
-			dir:   false,
 			match: true,
 		},
 		// baz.txt is ignored, but a file name including it should not be
 		{
 			path:  "something/with-baz.txt",
-			dir:   false,
 			match: false,
 		},
 		{
 			path:  "something/baz.x",
-			dir:   false,
 			match: false,
 		},
 		// // ignore sub- terraform.d paths
 		// {
 		// 	path:  "some-module/terraform.d/x",
-		// 	dir:   false,
 		// 	match: true,
 		// },
 		// // but not the root one
 		// // {
 		// // 	path:  "terraform.d/",
-		// // 	dir:   true,
 		// // 	match: false,
 		// // },
 		{
 			// We ignore the directory, but a file of the same name could exist
 			path:  "terraform.d",
-			dir:   false,
 			match: false,
 		},
 		// // Getting into * patterns
 		{
 			path:  "foo/ignored-doc.md",
-			dir:   false,
 			match: true,
 		},
 		{
 			path:  "foo/otherfile",
-			dir:   false,
 			match: false,
 		},
 	}
