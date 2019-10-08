@@ -87,9 +87,15 @@ func TestTerraformIgnore(t *testing.T) {
 			path:  "terraform.d",
 			match: false,
 		},
+		// boop.text is ignored everywhere
 		{
 			path:  "baz/boop.txt",
 			match: true,
+		},
+		// except at current directory
+		{
+			path:  "boop.txt",
+			match: false,
 		},
 	}
 	for i, p := range paths {

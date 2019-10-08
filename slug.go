@@ -78,6 +78,14 @@ func packWalkFn(root, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 			return nil
 		}
 
+		// Catch directories so we don't end up with empty directories,
+		// the files are ignored correctly
+		if info.IsDir() {
+			if m := matchIgnorePattern(subpath+"/", ignorePatterns); m {
+				return nil
+			}
+		}
+
 		// Get the relative path from the initial root directory.
 		subpath, err = filepath.Rel(root, strings.Replace(path, src, dst, 1))
 		if err != nil {

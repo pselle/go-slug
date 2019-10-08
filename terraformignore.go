@@ -48,8 +48,8 @@ func readRules(input io.Reader) []rule {
 		}
 		// Tidy things up
 		// pattern = filepath.Clean(pattern)
-		pattern = filepath.ToSlash(pattern)
-		if len(pattern) > 1 && pattern[0] == '/' {
+		// pattern = filepath.ToSlash(pattern)
+		if len(pattern) > 1 && pattern[0] == '/' && !rule.excluded {
 			pattern = pattern[1:]
 		}
 		rule.pattern = pattern
@@ -77,6 +77,7 @@ func matchIgnorePattern(path string, patterns []rule) bool {
 			negative = true
 		}
 		// fmt.Println("----------------------------")
+		// fmt.Println("path", path)
 		// fmt.Println("pattern:", pattern.pattern)
 		// fmt.Println("excluded: ", negative)
 		match, err := pattern.match(path)
@@ -89,22 +90,22 @@ func matchIgnorePattern(path string, patterns []rule) bool {
 			match, err = pattern.match(filename)
 		}
 
-		if !match && dir != "" {
-			// Check to see if the pattern matches one of our parent dirs.
-			// if len(pattern.dirs) <= len(dirSplit) {
-			// 	match, _ = pattern.match(strings.Join(dirSplit[:len(pattern.dirs)], string(os.PathSeparator)))
-			// }
+		if !match {
+			// Filename check for current directory
+			if pattern.pattern[0:1] == "/" && dir == "" {
+				pattern.pattern = pattern.pattern[1:]
+				pattern.compile()
+				match, _ = pattern.match(filename)
+			}
+		}
+
+		// Check to see if the pattern matches one of our parent dirs.
+		if !match {
 			// Is our rule for a directory? i.e. ends in /
 			if pattern.pattern[len(pattern.pattern)-1] == os.PathSeparator {
-				// fmt.Println("----------")
-				// fmt.Println(path)
 				// does some combination of its parents match our rule?
 				// Start at 1 to skip the .
 				for i := 1; i < len(dirSplit); i++ {
-					// x := strings.Join(dirSplit[:i], string(os.PathSeparator))
-					// fmt.Println(x)
-					// y := strings.Join(dirSplit[i:], string(os.PathSeparator))
-					// fmt.Println(y)
 					// From the left
 					match, _ = pattern.match(strings.Join(dirSplit[:i], string(os.PathSeparator)) + string(os.PathSeparator))
 					// We found a match! stop whilst ahead
@@ -121,9 +122,7 @@ func matchIgnorePattern(path string, patterns []rule) bool {
 				// Something special if our pattern is the current directory
 				// This is a case of say, ignoring terraform.d but NOT ./terraform.d/
 				if pattern.pattern[0:2] == "./" {
-					fmt.Println("HEY")
 					pattern.pattern = pattern.pattern[2:]
-					fmt.Println(pattern.pattern)
 					pattern.compile()
 					match, _ = pattern.match(dir)
 				}
@@ -151,14 +150,13 @@ type rule struct {
 
 func (r *rule) match(path string) (bool, error) {
 	if r.regex == nil {
-		fmt.Println("compilin")
 		if err := r.compile(); err != nil {
 			return false, filepath.ErrBadPattern
 		}
 	}
 
 	b := r.regex.MatchString(path)
-	fmt.Println(path, r.pattern, r.regex, b)
+	// fmt.Println(path, r.pattern, r.regex, b)
 	return b, nil
 }
 
@@ -254,7 +252,7 @@ var defaultExclusions = []rule{
 		excluded: false,
 	},
 	{
-		pattern:  ".terraform/modules",
+		pattern:  ".terraform/modules/",
 		excluded: true,
 	},
 }
