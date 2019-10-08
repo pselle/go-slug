@@ -76,13 +76,9 @@ func matchIgnorePattern(path string, patterns []rule) bool {
 		if pattern.excluded {
 			negative = true
 		}
-		// fmt.Println("----------------------------")
-		// fmt.Println("path", path)
-		// fmt.Println("pattern:", pattern.pattern)
-		// fmt.Println("excluded: ", negative)
 		match, err := pattern.match(path)
 		if err != nil {
-			return false //, err
+			return false
 		}
 
 		// If no match, try the filename alone
@@ -121,8 +117,8 @@ func matchIgnorePattern(path string, patterns []rule) bool {
 
 				// Something special if our pattern is the current directory
 				// This is a case of say, ignoring terraform.d but NOT ./terraform.d/
-				if pattern.pattern[0:2] == "./" {
-					pattern.pattern = pattern.pattern[2:]
+				if pattern.pattern[0] == '/' {
+					pattern.pattern = pattern.pattern[1:]
 					pattern.compile()
 					match, _ = pattern.match(dir)
 				}
@@ -138,7 +134,7 @@ func matchIgnorePattern(path string, patterns []rule) bool {
 		fmt.Printf("Skipping excluded path: %s \n", path)
 	}
 
-	return matched //, nil
+	return matched
 }
 
 type rule struct {

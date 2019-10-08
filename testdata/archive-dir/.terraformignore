@@ -7,7 +7,7 @@
 # ignore a directory
 terraform.d/
 # exclude ignoring a directory at the root
-!./terraform.d/
+!/terraform.d/
 # ignore a file at a subpath
 foo/baz.txt
 # ignore files with specific endings
