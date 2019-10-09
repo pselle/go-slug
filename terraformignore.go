@@ -12,12 +12,16 @@ import (
 )
 
 func parseIgnoreFile(rootPath string) []rule {
-	// Do the actual file opening
+	// Look for .terraformignore at our root path/src
 	file, err := os.Open(filepath.Join(rootPath, ".terraformignore"))
 	defer file.Close()
 
 	// If there's any kind of file error, punt and use the default ignore patterns
 	if err != nil {
+		// Only show the error debug if an error *other* than IsNotExist
+		if !os.IsNotExist(err) {
+			fmt.Printf("Error reading .terraformignore, default exclusions will apply: %v \n", err)
+		}
 		return defaultExclusions
 	}
 	return readRules(file)
@@ -44,11 +48,7 @@ func readRules(input io.Reader) []rule {
 		if pattern[0] == '!' {
 			rule.excluded = true
 			pattern = pattern[1:]
-			// Should I add back the ! later?
 		}
-		// Tidy things up
-		// pattern = filepath.Clean(pattern)
-		// pattern = filepath.ToSlash(pattern)
 		if len(pattern) > 1 && pattern[0] == '/' && !rule.excluded {
 			pattern = pattern[1:]
 		}
@@ -58,8 +58,8 @@ func readRules(input io.Reader) []rule {
 	}
 
 	if err := scanner.Err(); err != nil {
-		// return nil, fmt.Errorf("Error reading .terraformignore: %v", err)
-		fmt.Println("Handle error")
+		fmt.Printf("Error reading .terraformignore, default exclusions will apply: %v \n", err)
+		return defaultExclusions
 	}
 	return rules
 }
@@ -71,14 +71,11 @@ func matchIgnoreRule(path string, rules []rule) bool {
 	dirSplit := strings.Split(dir, string(os.PathSeparator))
 
 	for _, rule := range rules {
-		match, err := rule.match(path)
-		if err != nil {
-			return false
-		}
+		match, _ := rule.match(path)
 
 		// If no match, try the filename alone
 		if !match {
-			match, err = rule.match(filename)
+			match, _ = rule.match(filename)
 		}
 
 		if !match {
@@ -132,10 +129,10 @@ func matchIgnoreRule(path string, rules []rule) bool {
 }
 
 type rule struct {
-	val      string // the value of the rule itself
-	excluded bool
-	dirs     []string
-	regex    *regexp.Regexp
+	val      string         // the value of the rule itself
+	excluded bool           // ! is present, an exclusion rule
+	dirs     []string       // directories of the rule
+	regex    *regexp.Regexp // regular expression to match for the rule
 }
 
 func (r *rule) match(path string) (bool, error) {
@@ -227,9 +224,10 @@ func (r *rule) compile() error {
 }
 
 /*
-	".git/",
-	".terraform/",
-	"!.terraform/modules/",
+	Default rules:
+	.git/
+	.terraform/
+	!.terraform/modules/
 */
 
 var defaultExclusions = []rule{
