@@ -49,6 +49,14 @@ func TestTerraformIgnore(t *testing.T) {
 			path:  "parent/foo/baz.txt",
 			match: true,
 		},
+		{
+			path:  "parent/foo/bar.tf",
+			match: true,
+		},
+		{
+			path:  "parent/bar/bar.tf",
+			match: false,
+		},
 		// baz.txt is ignored, but a file name including it should not be
 		{
 			path:  "something/with-baz.txt",
@@ -99,7 +107,7 @@ func TestTerraformIgnore(t *testing.T) {
 		},
 	}
 	for i, p := range paths {
-		match := matchIgnorePattern(p.path, ignorePatterns)
+		match := matchIgnoreRule(p.path, ignorePatterns)
 		if match != p.match {
 			t.Fatalf("%s at index %d should be %t", p.path, i, p.match)
 		}

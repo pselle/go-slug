@@ -9,7 +9,7 @@ terraform.d/
 # exclude ignoring a directory at the root
 !/terraform.d/
 # ignore a file at a subpath
-foo/baz.txt
+**/foo/bar.tf
 # ignore files with specific endings
 foo/*.md
 # character groups

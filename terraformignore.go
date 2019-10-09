@@ -52,7 +52,7 @@ func readRules(input io.Reader) []rule {
 		if len(pattern) > 1 && pattern[0] == '/' && !rule.excluded {
 			pattern = pattern[1:]
 		}
-		rule.pattern = pattern
+		rule.val = pattern
 		rule.dirs = strings.Split(pattern, string(os.PathSeparator))
 		rules = append(rules, rule)
 	}
@@ -64,69 +64,63 @@ func readRules(input io.Reader) []rule {
 	return rules
 }
 
-func matchIgnorePattern(path string, patterns []rule) bool {
+func matchIgnoreRule(path string, rules []rule) bool {
 	matched := false
 	path = filepath.FromSlash(path)
 	dir, filename := filepath.Split(path)
 	dirSplit := strings.Split(dir, string(os.PathSeparator))
 
-	for _, pattern := range patterns {
-		negative := false
-
-		if pattern.excluded {
-			negative = true
-		}
-		match, err := pattern.match(path)
+	for _, rule := range rules {
+		match, err := rule.match(path)
 		if err != nil {
 			return false
 		}
 
 		// If no match, try the filename alone
 		if !match {
-			match, err = pattern.match(filename)
+			match, err = rule.match(filename)
 		}
 
 		if !match {
 			// Filename check for current directory
-			if pattern.pattern[0:1] == "/" && dir == "" {
-				pattern.pattern = pattern.pattern[1:]
-				pattern.compile()
-				match, _ = pattern.match(filename)
+			if rule.val[0:1] == "/" && dir == "" {
+				rule.val = rule.val[1:]
+				rule.compile()
+				match, _ = rule.match(filename)
 			}
 		}
 
-		// Check to see if the pattern matches one of our parent dirs.
 		if !match {
-			// Is our rule for a directory? i.e. ends in /
-			if pattern.pattern[len(pattern.pattern)-1] == os.PathSeparator {
-				// does some combination of its parents match our rule?
-				// Start at 1 to skip the .
-				for i := 1; i < len(dirSplit); i++ {
-					// From the left
-					match, _ = pattern.match(strings.Join(dirSplit[:i], string(os.PathSeparator)) + string(os.PathSeparator))
-					// We found a match! stop whilst ahead
-					if match {
-						break
-					}
-					// From the right
-					match, _ = pattern.match(strings.Join(dirSplit[i:], string(os.PathSeparator)))
-					if match {
-						break
-					}
+			// Directory checks
+			// Does some combination of its parents match our rule?
+			for i := 0; i < len(dirSplit); i++ {
+				// From the left
+				match, _ = rule.match(strings.Join(dirSplit[:i], string(os.PathSeparator)) + string(os.PathSeparator))
+				// We found a match! stop whilst ahead
+				if match {
+					break
 				}
+				// From the right
+				match, _ = rule.match(strings.Join(dirSplit[i:], string(os.PathSeparator)))
+				if match {
+					break
+				}
+			}
+		}
 
-				// Something special if our pattern is the current directory
-				// This is a case of say, ignoring terraform.d but NOT ./terraform.d/
-				if pattern.pattern[0] == '/' {
-					pattern.pattern = pattern.pattern[1:]
-					pattern.compile()
-					match, _ = pattern.match(dir)
-				}
+		if !match {
+			// Directory check for current directory
+			// This is a case of say, ignoring terraform.d but NOT ./terraform.d/
+			// Since this munges the regex for this pattern, must happen after other directory checks
+			if rule.val[0] == '/' {
+				rule.val = rule.val[1:]
+				rule.compile()
+				match, _ = rule.match(dir)
 			}
 		}
 
 		if match {
-			matched = !negative
+			matched = !rule.excluded
 		}
 	}
 
@@ -138,7 +132,7 @@ func matchIgnorePattern(path string, patterns []rule) bool {
 }
 
 type rule struct {
-	pattern  string
+	val      string // the value of the rule itself
 	excluded bool
 	dirs     []string
 	regex    *regexp.Regexp
@@ -158,7 +152,7 @@ func (r *rule) match(path string) (bool, error) {
 
 func (r *rule) compile() error {
 	regStr := "^"
-	pattern := r.pattern
+	pattern := r.val
 	// Go through the pattern and convert it to a regexp.
 	// Use a scanner to support utf-8 chars.
 	var scan scanner.Scanner
@@ -240,15 +234,15 @@ func (r *rule) compile() error {
 
 var defaultExclusions = []rule{
 	{
-		pattern:  ".git/",
+		val:      ".git/",
 		excluded: false,
 	},
 	{
-		pattern:  ".terraform/",
+		val:      ".terraform/",
 		excluded: false,
 	},
 	{
-		pattern:  ".terraform/modules/",
+		val:      ".terraform/modules/",
 		excluded: true,
 	},
 }
