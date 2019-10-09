@@ -13,7 +13,7 @@ func TestTerraformIgnore(t *testing.T) {
 	}
 
 	// load the .terraformignore file's patterns
-	ignorePatterns := parseIgnoreFile("testdata/archive-dir")
+	ignoreRules := parseIgnoreFile("testdata/archive-dir")
 	type file struct {
 		// the actual path, should be file path format /dir/subdir/file.extension
 		path string
@@ -90,8 +90,8 @@ func TestTerraformIgnore(t *testing.T) {
 			path:  "terraform.d/foo",
 			match: false,
 		},
+		// We ignore the directory, but a file of the same name could exist
 		{
-			// We ignore the directory, but a file of the same name could exist
 			path:  "terraform.d",
 			match: false,
 		},
@@ -107,7 +107,7 @@ func TestTerraformIgnore(t *testing.T) {
 		},
 	}
 	for i, p := range paths {
-		match := matchIgnoreRule(p.path, ignorePatterns)
+		match := matchIgnoreRule(p.path, ignoreRules)
 		if match != p.match {
 			t.Fatalf("%s at index %d should be %t", p.path, i, p.match)
 		}

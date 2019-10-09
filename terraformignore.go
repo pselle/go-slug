@@ -44,7 +44,9 @@ func readRules(input io.Reader) []rule {
 		if pattern[0] == '#' {
 			continue
 		}
+		// New rule structure
 		rule := rule{}
+		// Exclusions
 		if pattern[0] == '!' {
 			rule.excluded = true
 			pattern = pattern[1:]

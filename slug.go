@@ -33,15 +33,15 @@ func Pack(src string, w io.Writer, dereference bool) (*Meta, error) {
 	// Tar the file contents.
 	tarW := tar.NewWriter(gzipW)
 
-	// Load the ignore pattern configuration, which will use
+	// Load the ignore rule configuration, which will use
 	// defaults if no .terraformignore is configured
-	ignorePatterns := parseIgnoreFile(src)
+	ignoreRules := parseIgnoreFile(src)
 
 	// Track the metadata details as we go.
 	meta := &Meta{}
 
 	// Walk the tree of files.
-	err := filepath.Walk(src, packWalkFn(src, src, src, tarW, meta, dereference, ignorePatterns))
+	err := filepath.Walk(src, packWalkFn(src, src, src, tarW, meta, dereference, ignoreRules))
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func Pack(src string, w io.Writer, dereference bool) (*Meta, error) {
 	return meta, nil
 }
 
-func packWalkFn(root, src, dst string, tarW *tar.Writer, meta *Meta, dereference bool, ignorePatterns []rule) filepath.WalkFunc {
+func packWalkFn(root, src, dst string, tarW *tar.Writer, meta *Meta, dereference bool, ignoreRules []rule) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -74,14 +74,14 @@ func packWalkFn(root, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 			return nil
 		}
 
-		if m := matchIgnoreRule(subpath, ignorePatterns); m {
+		if m := matchIgnoreRule(subpath, ignoreRules); m {
 			return nil
 		}
 
 		// Catch directories so we don't end up with empty directories,
 		// the files are ignored correctly
 		if info.IsDir() {
-			if m := matchIgnoreRule(subpath+string(os.PathSeparator), ignorePatterns); m {
+			if m := matchIgnoreRule(subpath+string(os.PathSeparator), ignoreRules); m {
 				return nil
 			}
 		}
@@ -155,7 +155,7 @@ func packWalkFn(root, src, dst string, tarW *tar.Writer, meta *Meta, dereference
 			// directory by calling the packWalkFn with updated arguments.
 			if info.IsDir() {
 				// I'm wondering if this section is unnecessary?
-				return filepath.Walk(target, packWalkFn(root, target, path, tarW, meta, dereference, ignorePatterns))
+				return filepath.Walk(target, packWalkFn(root, target, path, tarW, meta, dereference, ignoreRules))
 			}
 
 			// Dereference this symlink by updating the header with the target file
